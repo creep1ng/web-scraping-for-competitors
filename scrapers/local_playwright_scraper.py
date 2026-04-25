@@ -2,6 +2,7 @@ import asyncio
 from typing import List, Optional, Tuple
 from playwright.async_api import async_playwright, Browser, BrowserContext
 from .base import BaseScraper
+from logger import logger
 
 
 class LocalPlaywrightScraper(BaseScraper):
@@ -32,9 +33,10 @@ class LocalPlaywrightScraper(BaseScraper):
             await page.wait_for_timeout(3000)
             html = await page.content()
             await page.close()
+            logger.debug(f"Fetch exitoso para {url}", extra={"url": url, "html": html})
             return html
         except Exception as e:
-            print(f"Fetch error: {e}")
+            logger.warning(f"Fetch error en {url}: {e}", extra={"url": url}, exc_info=True)
             return None
         finally:
             if not self._context_pool.full():
@@ -60,6 +62,7 @@ class LocalPlaywrightScraper(BaseScraper):
 
             html1 = await page.content()
             results.append((1, html1))
+            logger.debug(f"Pagina 1 obtenidak para {url}", extra={"url": url, "html": html1})
 
             for page_num in range(2, max_pages + 1):
                 js_code = (
@@ -73,11 +76,12 @@ class LocalPlaywrightScraper(BaseScraper):
 
                 html = await page.content()
                 results.append((page_num, html))
+                logger.debug(f"Pagina {page_num} obtenidak para {url}", extra={"url": url, "html": html})
 
             return results
 
         except Exception as e:
-            print(f"  [fetch_with_pagination] Error: {e}")
+            logger.warning(f"Error en fetch_with_pagination para {url}: {e}", extra={"url": url}, exc_info=True)
             return results if results else []
         finally:
             if not self._context_pool.full():

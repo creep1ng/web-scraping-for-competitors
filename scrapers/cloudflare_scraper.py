@@ -1,6 +1,7 @@
 from typing import Optional
 import aiohttp
 from .base import BaseScraper
+from logger import logger
 
 
 class CloudflareScraper(BaseScraper):
@@ -25,9 +26,14 @@ class CloudflareScraper(BaseScraper):
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get("html", "")
+                    html = data.get("html", "")
+                    logger.debug(f"Fetch exitoso para {url}", extra={"url": url, "html": html})
+                    return html
+                else:
+                    logger.warning(f"Respuesta no exitosa para {url}: status={response.status}", extra={"url": url})
                 return None
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error en fetch para {url}: {e}", extra={"url": url}, exc_info=True)
             return None
 
     async def close(self) -> None:

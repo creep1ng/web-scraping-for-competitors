@@ -6,6 +6,7 @@ from typing import List, Dict
 
 from scrapers import get_scraper
 from extractors import extract_products_from_html, get_pagination_info
+from logger import logger
 
 load_dotenv()
 
@@ -16,22 +17,24 @@ async def process_url(url: str, scraper, semaphore: asyncio.Semaphore, max_pages
         if not url:
             return []
 
-        print(f"\n{'='*60}")
-        print(f"Procesando: {url}")
+        logger.info(f"Procesando: {url}", extra={"url": url})
+        logger.debug(f"Iniciando procesamiento de URL", extra={"url": url})
 
         html = await scraper.fetch(url)
         if not html:
-            print(f"  Error: No se pudo obtener HTML de {url}")
+            logger.error(f"No se pudo obtener HTML de {url}", extra={"url": url})
             return []
+
+        logger.debug(f"HTML obtenido para {url}", extra={"url": url, "html": html})
 
         pagination = get_pagination_info(html)
         all_products = extract_products_from_html(html, url)
-        print(f"  Página 1: {len(all_products)} productos")
+        logger.info(f"Pagina 1: {len(all_products)} productos", extra={"url": url})
 
         if pagination["has_pagination"] and pagination["ajax_pagination"]:
             pages_to_scrape = min(pagination["total_pages"], max_pages)
-            print(f"  Paginación AJAX: {pagination['total_pages']} páginas totales")
-            print(f"  Navegando {pages_to_scrape} páginas con clicks...")
+            logger.info(f"Paginacion AJAX: {pagination['total_pages']} paginas totales", extra={"url": url})
+            logger.debug(f"Navegando {pages_to_scrape} paginas con clicks", extra={"url": url})
 
             try:
                 page_contents = await scraper.fetch_with_pagination_click(
@@ -44,12 +47,13 @@ async def process_url(url: str, scraper, semaphore: asyncio.Semaphore, max_pages
                 for page_num, page_html in page_contents[1:]:
                     page_products = extract_products_from_html(page_html, url)
                     all_products.extend(page_products)
+                    logger.debug(f"Pagina {page_num} scrapeada: {len(page_products)} productos", extra={"url": url, "html": page_html})
 
             except Exception as e:
-                print(f"  Error durante paginación: {e}")
+                logger.warning(f"Error durante paginacion: {e}", extra={"url": url}, exc_info=True)
 
         elif pagination["has_pagination"] and max_pages > 1:
-            print(f"  Navegando {max_pages - 1} páginas por URL...")
+            logger.info(f"Navegando {max_pages - 1} paginas por URL", extra={"url": url})
             for page_num in range(2, max_pages + 1):
                 page_url = f"{url.rstrip('/')}/page/{page_num}/"
                 page_html = await scraper.fetch(page_url)
@@ -59,29 +63,29 @@ async def process_url(url: str, scraper, semaphore: asyncio.Semaphore, max_pages
                         all_products.extend(page_products)
                 await asyncio.sleep(0.3)
 
-        print(f"  Total productos: {len(all_products)}")
+        logger.info(f"Total productos: {len(all_products)}", extra={"url": url})
         return all_products
 
 
 async def main():
     urls_file = "urls.txt"
     if not os.path.exists(urls_file):
-        print(f"Error: No se encontró {urls_file}")
+        logger.error(f"No se encontro {urls_file}")
         return
 
     with open(urls_file, "r") as f:
         urls = [line.strip() for line in f if line.strip()]
 
     if not urls:
-        print("No hay URLs para procesar")
+        logger.warning("No hay URLs para procesar")
         return
 
     max_concurrency = int(os.getenv("MAX_CONCURRENCY", "3"))
     max_pages_per_url = int(os.getenv("MAX_PAGES_PER_URL", "5"))
     semaphore = asyncio.Semaphore(max_concurrency)
 
-    print(f"Iniciando scraping de {len(urls)} URLs...")
-    print(f"Concurrency: {max_concurrency}, Max pages/URL: {max_pages_per_url}")
+    logger.info(f"Iniciando scraping de {len(urls)} URLs...")
+    logger.info(f"Concurrency: {max_concurrency}, Max pages/URL: {max_pages_per_url}")
 
     scraper = get_scraper()
 
@@ -99,17 +103,12 @@ async def main():
             df.to_csv("resultados_competidores.csv", index=False)
             df.to_excel("resultados_competidores.xlsx", index=False)
 
-            print(f"\n{'='*60}")
-            print(f"COMPLETADO:")
-            print(f"  Total productos: {len(all_products)}")
-            print(f"  CSV: resultados_competidores.csv")
-            print(f"  Excel: resultados_competidores.xlsx")
+            logger.info(f"COMPLETADO: {len(all_products)} productos extraidos")
+            logger.info(f"CSV: resultados_competidores.csv, Excel: resultados_competidores.xlsx")
 
-            print(f"\n  Vista previa:")
-            for i, row in df.head(5).iterrows():
-                print(f"    {i+1}. {row['nombre_producto'][:50]} - {row['precio']}")
+            logger.debug(f"Datos del DataFrame", extra={"html": df.head(5).to_dict()})
         else:
-            print("\nNo se encontraron productos.")
+            logger.warning("No se encontraron productos")
 
     finally:
         await scraper.close()

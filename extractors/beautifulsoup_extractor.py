@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import re
+from logger import logger
 
 
 PRODUCT_SELECTORS = [
@@ -49,6 +50,7 @@ def extract_products_from_html(html: str, url: str) -> List[Dict[str, str]]:
 
     products = []
     seen_titles = set()
+    selector_used = None
 
     for product_sel in PRODUCT_SELECTORS:
         product_elems = soup.select(product_sel)
@@ -59,9 +61,11 @@ def extract_products_from_html(html: str, url: str) -> List[Dict[str, str]]:
                     seen_titles.add(product_data["nombre_producto"])
                     products.append(product_data)
             if products:
+                selector_used = product_sel
                 break
 
     if not products:
+        logger.warning(f"No se encontraron productos con selectores estándar para {url}", extra={"url": url})
         for h2 in soup.find_all("h2"):
             title_text = clean_text(h2.get_text())
             if title_text and len(title_text) > 5 and "$" in str(h2.parent):
@@ -69,6 +73,11 @@ def extract_products_from_html(html: str, url: str) -> List[Dict[str, str]]:
                 if product_data and product_data["nombre_producto"] not in seen_titles:
                     seen_titles.add(product_data["nombre_producto"])
                     products.append(product_data)
+        if products:
+            logger.debug(f"Extrayendo productos via fallback h2 para {url}", extra={"url": url, "html": html})
+
+    if products:
+        logger.debug(f"Extraidos {len(products)} productos usando selector {selector_used}", extra={"url": url, "html": html})
 
     return products
 
@@ -121,7 +130,6 @@ def _extract_product_data(element, base_url: str) -> Optional[Dict[str, str]]:
                 price = f"$ {parsed}"
                 break
 
-    # Prefer sale price (ins) over original price (del) if both exist
     ins = element.select_one("ins")
     if ins:
         ins_text = ins.get_text(strip=True)
