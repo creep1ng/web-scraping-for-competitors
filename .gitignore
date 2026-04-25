@@ -157,7 +157,15 @@ pyrightconfig.json
 .playwright-mcp/
 resultados_competidores.csv
 resultados_competidores.xlsx
+reporte_comparativo_precios.csv
+reporte_comparativo_precios.xlsx
+matches_revisar.xlsx
 urls.txt
 debug_prices.py
 investigate_pagination.py
 investigate_click.py
+
+# Cache and logs
+cache/
+logs/
+__pycache__/
