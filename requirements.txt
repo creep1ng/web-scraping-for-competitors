@@ -1,8 +1,0 @@
-aiohttp
-playwright
-openai
-pandas
-python-dotenv
-openpyxl
-beautifulsoup4
-lxml
