@@ -44,6 +44,35 @@ class LocalPlaywrightScraper(BaseScraper):
             else:
                 await context.close()
 
+    async def request(self, url: str, method: str = "GET", body: Optional[str] = None, headers: Optional[dict] = None) -> Optional[str]:
+        """Playwright can perform navigation-like requests. For POST we use evaluate to fetch."""
+        if method.upper() == "GET":
+            return await self.fetch(url)
+        await self._ensure_browser()
+        context = await self._context_pool.get()
+        try:
+            page = await context.new_page()
+            await page.goto("about:blank")
+            result = await page.evaluate(
+                """async ({url, method, body, headers}) => {
+                    const opts = { method, headers: headers || {} };
+                    if (body) opts.body = body;
+                    const res = await fetch(url, opts);
+                    return await res.text();
+                }""",
+                {"url": url, "method": method, "body": body, "headers": headers or {}}
+            )
+            await page.close()
+            return result
+        except Exception as e:
+            logger.warning(f"Request error en {url}: {e}", extra={"url": url}, exc_info=True)
+            return None
+        finally:
+            if not self._context_pool.full():
+                await self._context_pool.put(context)
+            else:
+                await context.close()
+
     async def fetch_with_pagination_click(
         self,
         url: str,

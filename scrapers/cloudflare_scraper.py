@@ -17,23 +17,32 @@ class CloudflareScraper(BaseScraper):
         return self._session
 
     async def fetch(self, url: str) -> Optional[str]:
+        return await self.request(url, method="GET")
+
+    async def request(self, url: str, method: str = "GET", body: Optional[str] = None, headers: Optional[dict] = None) -> Optional[str]:
         try:
             session = await self._get_session()
+            payload = {"url": url, "method": method}
+            if body is not None:
+                payload["body"] = body
+            if headers is not None:
+                payload["headers"] = headers
+
             async with session.post(
                 self.worker_url,
-                json={"url": url},
+                json=payload,
                 timeout=aiohttp.ClientTimeout(total=60)
             ) as response:
                 if response.status == 200:
                     data = await response.json()
                     html = data.get("html", "")
-                    logger.debug(f"Fetch exitoso para {url}", extra={"url": url, "html": html})
+                    logger.debug(f"Request exitoso para {url}", extra={"url": url, "html": html})
                     return html
                 else:
                     logger.warning(f"Respuesta no exitosa para {url}: status={response.status}", extra={"url": url})
                 return None
         except Exception as e:
-            logger.warning(f"Error en fetch para {url}: {e}", extra={"url": url}, exc_info=True)
+            logger.warning(f"Error en request para {url}: {e}", extra={"url": url}, exc_info=True)
             return None
 
     async def close(self) -> None:
